@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore, GRADIENT_PRESETS, buildGradient } from '../store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -59,6 +59,11 @@ const LeftPanel: React.FC = () => {
   const [showProfileInput, setShowProfileInput] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [appVersion, setAppVersion] = useState('');
+
+  useEffect(() => {
+    window.electronAPI?.getVersion?.().then(setAppVersion).catch(() => setAppVersion(''));
+  }, []);
 
   const allPresets = [...GRADIENT_PRESETS, ...store.gradientUserPresets];
   const bg = store.background;
@@ -512,7 +517,7 @@ const LeftPanel: React.FC = () => {
         >
           {store.darkMode ? '☀' : '☾'}
         </button>
-        <span className="text-[12px] text-[#747b91] font-medium">v1.0.0</span>
+        <span className="text-[12px] text-[#747b91] font-medium">{appVersion ? `v${appVersion}` : 'v?.?.?'}</span>
         <div className="flex items-center gap-1.5">
           <span
             className="w-2 h-2 rounded-full bg-[#1dd65f]"

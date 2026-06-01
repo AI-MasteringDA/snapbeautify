@@ -360,6 +360,8 @@ ipcMain.on('window-maximize', () => {
 
 ipcMain.on('window-close', () => mainWindow?.hide());
 
+ipcMain.handle('get-version', () => app.getVersion());
+
 // ─── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.on('ready', () => {

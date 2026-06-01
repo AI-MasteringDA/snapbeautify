@@ -12,7 +12,7 @@ const config: ForgeConfig = {
     asar: true,
     name: 'SnapBeautify',
     executableName: 'snapbeautify',
-    appVersion: '1.0.1',
+    appVersion: '1.0.2',
     win32metadata: {
       CompanyName: 'MDA',
       FileDescription: 'Beautiful screenshots in seconds',
