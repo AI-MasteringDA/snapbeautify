@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useStore, GRADIENT_PRESETS } from '../store';
+import { useStore, GRADIENT_PRESETS, buildGradient } from '../store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +58,10 @@ const LeftPanel: React.FC = () => {
   const [bgTab, setBgTab] = useState<'gradient' | 'solid' | 'image'>(store.background.type);
   const [showProfileInput, setShowProfileInput] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const allPresets = [...GRADIENT_PRESETS, ...store.gradientUserPresets];
+  const bg = store.background;
 
   const handleSaveProfile = () => {
     if (!newProfileName.trim()) return;
@@ -300,9 +304,9 @@ const LeftPanel: React.FC = () => {
         {/* BACKGROUND */}
         <SectionTitle>Background</SectionTitle>
 
-        {/* Segmented tabs */}
+        {/* Segmented tabs — Gradient | Image | Solid */}
         <div className="grid grid-cols-3 border border-[#d9def0] rounded-lg overflow-hidden mb-4">
-          {(['gradient', 'solid', 'image'] as const).map((tab) => (
+          {(['gradient', 'image', 'solid'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => { setBgTab(tab); store.setBackground({ type: tab }); }}
@@ -318,28 +322,124 @@ const LeftPanel: React.FC = () => {
           ))}
         </div>
 
-        {/* Gradient palette — 2×5 circles */}
+        {/* Gradient */}
         {bgTab === 'gradient' && (
-          <div className="grid grid-cols-5 gap-2.5">
-            {GRADIENT_PRESETS.map((gradient, i) => {
-              const active = store.background.gradientPreset === i && store.background.type === 'gradient';
-              return (
-                <button
-                  key={i}
-                  onClick={() => store.setBackground({ type: 'gradient', gradient, gradientPreset: i })}
-                  title={`Preset ${i + 1}`}
-                  className="rounded-full transition-all hover:scale-110 aspect-square"
-                  style={{
-                    background: gradient,
-                    outline: active ? '2.5px solid #4f35e8' : 'none',
-                    outlineOffset: active ? '3px' : '0',
-                    transform: active ? 'scale(1.08)' : undefined,
-                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.6)',
-                  }}
-                />
-              );
-            })}
-          </div>
+          <>
+            {/* Preset swatches (built-in + user) */}
+            <div className="grid grid-cols-5 gap-2.5">
+              {allPresets.map((colors, i) => {
+                const active = bg.gradientPreset === i && bg.type === 'gradient';
+                return (
+                  <button
+                    key={i}
+                    onClick={() => store.applyGradientPreset(i, colors)}
+                    title={i < GRADIENT_PRESETS.length ? `Preset ${i + 1}` : 'My preset'}
+                    className="rounded-lg transition-all hover:scale-105 aspect-square"
+                    style={{
+                      background: buildGradient('linear', 135, colors),
+                      outline: active ? '2.5px solid #4f35e8' : '1px solid #e3e6f5',
+                      outlineOffset: active ? '2px' : '0',
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Advanced gradient settings */}
+            {showAdvanced && (
+              <div className="mt-4 flex flex-col gap-4">
+                {/* Linear / Radial */}
+                <div className="grid grid-cols-2 gap-2">
+                  {(['linear', 'radial'] as const).map((gt) => {
+                    const on = bg.gradientType === gt;
+                    return (
+                      <button
+                        key={gt}
+                        onClick={() => store.setGradientType(gt)}
+                        className={`py-2 text-[12px] font-bold rounded-lg border capitalize transition-all ${
+                          on ? 'text-white border-transparent' : 'border-[#d9def0] text-[#26324a] bg-white hover:bg-[#f0f2ff]'
+                        }`}
+                        style={on ? { background: ACTIVE_GRADIENT } : {}}
+                      >
+                        {gt}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Angle (linear only) */}
+                {bg.gradientType === 'linear' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] font-semibold text-[#111827]">Angle</span>
+                      <ValBox value={bg.gradientAngle} />
+                    </div>
+                    <input
+                      type="range" min={0} max={360} value={bg.gradientAngle}
+                      onChange={(e) => store.setGradientAngle(Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                )}
+
+                {/* Gradient colors editor */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex-1 border-t border-[#eef0f7]" />
+                    <span className="text-[10px] font-bold tracking-[1px] text-[#70768c] uppercase">Gradient Colors</span>
+                    <div className="flex-1 border-t border-[#eef0f7]" />
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {bg.gradientColors.map((color, i) => (
+                      <div key={i} className="relative group aspect-square">
+                        <label className="relative block w-full h-full cursor-pointer rounded-lg overflow-hidden border border-[#d9def0]">
+                          <span className="absolute inset-0" style={{ background: color }} />
+                          <input
+                            type="color" value={color}
+                            onChange={(e) => store.updateGradientColor(i, e.target.value)}
+                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                          />
+                        </label>
+                        {bg.gradientColors.length > 2 && (
+                          <button
+                            onClick={() => store.removeGradientColor(i)}
+                            title="Remove color"
+                            className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#ef4444] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                          >
+                            <svg width="8" height="8" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><line x1="11" y1="1" x2="1" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {/* Add color */}
+                    <button
+                      onClick={() => store.addGradientColor()}
+                      title="Add color"
+                      className="aspect-square rounded-lg border-2 border-dashed border-[#d9def0] text-[#9592ab] flex items-center justify-center hover:border-[#4f35e8] hover:text-[#4f35e8] transition-colors"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                    </button>
+                  </div>
+
+                  {/* Add to presets */}
+                  <button
+                    onClick={() => store.addGradientUserPreset()}
+                    className="w-full mt-3 py-2 rounded-lg bg-[#f0f2ff] text-[#4f35e8] text-[12px] font-bold hover:bg-[#e6e9ff] transition-colors"
+                  >
+                    + Add to Presets
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Show/Hide advanced toggle */}
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="w-full mt-3 text-[12px] font-semibold text-[#7c8294] hover:text-[#4f35e8] transition-colors text-right"
+            >
+              {showAdvanced ? 'Hide Advance Setting' : 'Show Advance Setting'}
+            </button>
+          </>
         )}
 
         {/* Solid color */}

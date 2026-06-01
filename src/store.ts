@@ -1,25 +1,37 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
-export const GRADIENT_PRESETS = [
-  'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-  'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-  'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
-  'linear-gradient(135deg, #2d3561 0%, #c05c7e 100%)',
-  'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
+// Each preset is a list of color stops (Savvy-style vibrant gradients).
+export const GRADIENT_PRESETS: string[][] = [
+  ['#3a1c71', '#d76d77', '#ffaf7b'],
+  ['#0f2027', '#203a43', '#2c5364'],
+  ['#f7971e', '#ffd200', '#21d4fd'],
+  ['#a18cd1', '#fbc2eb'],
+  ['#134e5e', '#71b280'],
+  ['#43cea2', '#185a9d'],
+  ['#ee9ca7', '#ffdde1'],
+  ['#c94b4b', '#4b134f'],
+  ['#2193b0', '#6dd5ed'],
+  ['#cc2b5e', '#753a88'],
 ];
 
 export interface BackgroundConfig {
   type: 'gradient' | 'solid' | 'image';
-  gradient: string;
-  gradientPreset: number;
+  gradientType: 'linear' | 'radial';
+  gradientAngle: number;
+  gradientColors: string[];
+  gradientPreset: number; // index into combined preset list, -1 = custom
   solidColor: string;
   imageUrl: string;
 }
+
+// Build a CSS gradient string from the config.
+export const buildGradient = (type: 'linear' | 'radial', angle: number, colors: string[]): string => {
+  const stops = colors.join(', ');
+  return type === 'radial'
+    ? `radial-gradient(circle, ${stops})`
+    : `linear-gradient(${angle}deg, ${stops})`;
+};
 
 export interface Profile {
   name: string;
@@ -63,9 +75,17 @@ export interface AppState {
   drawColor: string;
   annotations: Annotation[];
   darkMode: boolean;
+  gradientUserPresets: string[][];
 
   setScreenshot: (dataURL: string) => void;
   setBackground: (bg: Partial<BackgroundConfig>) => void;
+  applyGradientPreset: (index: number, colors: string[]) => void;
+  setGradientType: (t: 'linear' | 'radial') => void;
+  setGradientAngle: (a: number) => void;
+  updateGradientColor: (index: number, color: string) => void;
+  addGradientColor: () => void;
+  removeGradientColor: (index: number) => void;
+  addGradientUserPreset: () => void;
   setPadding: (v: number) => void;
   setInset: (v: number) => void;
   setInsetColor: (v: string) => void;
@@ -94,13 +114,15 @@ export interface AppState {
 
 const DEFAULT_BACKGROUND: BackgroundConfig = {
   type: 'gradient',
-  gradient: GRADIENT_PRESETS[0],
+  gradientType: 'linear',
+  gradientAngle: 135,
+  gradientColors: GRADIENT_PRESETS[0],
   gradientPreset: 0,
   solidColor: '#6366f1',
   imageUrl: '',
 };
 
-export const useStore = create<AppState>((set, get) => ({
+export const useStore = create<AppState>()(persist((set, get) => ({
   screenshot: null,
   background: DEFAULT_BACKGROUND,
   padding: 40,
@@ -127,12 +149,49 @@ export const useStore = create<AppState>((set, get) => ({
   drawColor: '#ef4444',
   annotations: [],
   darkMode: false,
+  gradientUserPresets: [],
 
   setScreenshot: (dataURL) => set({ screenshot: dataURL, annotations: [], drawTool: 'none', offsetX: 0, offsetY: 0 }),
 
   setBackground: (bg) =>
     set((state) => ({
       background: { ...state.background, ...bg },
+    })),
+
+  applyGradientPreset: (index, colors) =>
+    set((state) => ({
+      background: { ...state.background, type: 'gradient', gradientColors: [...colors], gradientPreset: index },
+    })),
+
+  setGradientType: (t) =>
+    set((state) => ({ background: { ...state.background, gradientType: t } })),
+
+  setGradientAngle: (a) =>
+    set((state) => ({ background: { ...state.background, gradientAngle: a } })),
+
+  updateGradientColor: (index, color) =>
+    set((state) => {
+      const gradientColors = state.background.gradientColors.map((c, i) => (i === index ? color : c));
+      return { background: { ...state.background, gradientColors, gradientPreset: -1 } };
+    }),
+
+  addGradientColor: () =>
+    set((state) => {
+      const colors = state.background.gradientColors;
+      const next = colors.length > 0 ? colors[colors.length - 1] : '#ffffff';
+      return { background: { ...state.background, gradientColors: [...colors, next], gradientPreset: -1 } };
+    }),
+
+  removeGradientColor: (index) =>
+    set((state) => {
+      if (state.background.gradientColors.length <= 2) return {} as Partial<AppState>;
+      const gradientColors = state.background.gradientColors.filter((_, i) => i !== index);
+      return { background: { ...state.background, gradientColors, gradientPreset: -1 } };
+    }),
+
+  addGradientUserPreset: () =>
+    set((state) => ({
+      gradientUserPresets: [...state.gradientUserPresets, [...state.background.gradientColors]],
     })),
 
   setPadding: (v) => set({ padding: v }),
@@ -205,4 +264,39 @@ export const useStore = create<AppState>((set, get) => ({
   undoAnnotation: () => set((s) => ({ annotations: s.annotations.slice(0, -1) })),
   clearAnnotations: () => set({ annotations: [] }),
   toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
+}), {
+  name: 'snapbeautify-state',
+  storage: createJSONStorage(() => localStorage),
+  version: 1,
+  // Discard persisted state from older schemas (missing required fields).
+  migrate: (persisted: any) => {
+    if (persisted?.background && !Array.isArray(persisted.background.gradientColors)) {
+      persisted.background = DEFAULT_BACKGROUND;
+    }
+    return persisted;
+  },
+  // Only persist user settings; skip transient/per-screenshot state.
+  partialize: (state) => ({
+    background: state.background,
+    padding: state.padding,
+    inset: state.inset,
+    insetColor: state.insetColor,
+    borderWidth: state.borderWidth,
+    borderColor: state.borderColor,
+    shadowSize: state.shadowSize,
+    shadowColor: state.shadowColor,
+    rounded: state.rounded,
+    frame: state.frame,
+    aspectRatio: state.aspectRatio,
+    customWidth: state.customWidth,
+    customHeight: state.customHeight,
+    positionX: state.positionX,
+    positionY: state.positionY,
+    zoom: state.zoom,
+    profiles: state.profiles,
+    activeProfile: state.activeProfile,
+    darkMode: state.darkMode,
+    gradientUserPresets: state.gradientUserPresets,
+    drawColor: state.drawColor,
+  }),
 }));

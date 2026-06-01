@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useEffect } from 'react';
 import { toPng } from 'html-to-image';
-import { useStore, DrawTool } from '../store';
+import { useStore, DrawTool, buildGradient } from '../store';
 import AnnotationLayer from './AnnotationLayer';
 
 const PreviewCanvas: React.FC = () => {
@@ -60,7 +60,7 @@ const PreviewCanvas: React.FC = () => {
   const getBgStyle = (): React.CSSProperties => {
     const { background } = store;
     if (background.type === 'gradient') {
-      return { background: background.gradient };
+      return { background: buildGradient(background.gradientType, background.gradientAngle, background.gradientColors) };
     }
     if (background.type === 'solid') {
       return { background: background.solidColor };
@@ -96,7 +96,16 @@ const PreviewCanvas: React.FC = () => {
   const exportImage = useCallback(async (): Promise<string | null> => {
     if (!previewRef.current) return null;
     try {
-      return await toPng(previewRef.current, { cacheBust: true, pixelRatio: 2 });
+      // Adaptive pixelRatio: export so the embedded screenshot keeps its full
+      // native resolution. clientWidth is the unscaled layout width (CSS zoom
+      // transform on the ancestor doesn't affect it).
+      let pixelRatio = 3;
+      const img = previewRef.current.querySelector('img');
+      if (img && img.naturalWidth && img.clientWidth) {
+        const needed = img.naturalWidth / img.clientWidth;
+        pixelRatio = Math.min(5, Math.max(3, needed));
+      }
+      return await toPng(previewRef.current, { cacheBust: true, pixelRatio });
     } catch (err) {
       console.error('Export failed:', err);
       return null;

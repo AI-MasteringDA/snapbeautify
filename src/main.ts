@@ -62,6 +62,9 @@ const createWindow = () => {
     );
   }
 
+  // Open maximized (fills the screen) without needing the maximize button.
+  mainWindow.maximize();
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -153,10 +156,17 @@ const createTray = () => {
 // ─── Screenshot helpers ───────────────────────────────────────────────────────
 
 const takeFullScreenshot = async (): Promise<string | null> => {
-  const { size } = screen.getPrimaryDisplay();
+  const display = screen.getPrimaryDisplay();
+  const { width, height } = display.size;
+  // Capture at the display's NATIVE pixel resolution (logical size × scale),
+  // otherwise HiDPI/4K screens get downscaled, blurry captures.
+  const scale = display.scaleFactor || 1;
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
-    thumbnailSize: { width: size.width, height: size.height },
+    thumbnailSize: {
+      width: Math.round(width * scale),
+      height: Math.round(height * scale),
+    },
   });
   return sources.length > 0 ? sources[0].thumbnail.toDataURL() : null;
 };
