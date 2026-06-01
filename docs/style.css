@@ -120,6 +120,133 @@ h1 { font-size: clamp(40px, 6vw, 72px); line-height: 1.05; font-weight: 800; let
     0 80px 0 -2px #d9def0, 0 96px 0 -2px #eaedff;
 }
 
+/* Install hint under CTA */
+.install-hint {
+  display: inline-block;
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--primary);
+  padding-bottom: 1px;
+}
+.install-hint:hover { color: var(--primary-3); }
+
+/* Install guide */
+.install-guide { padding: 80px 0 40px; }
+.guide-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: var(--shadow-md);
+}
+.guide-head { display: flex; align-items: center; gap: 18px; margin-bottom: 32px; }
+.shield {
+  width: 56px; height: 56px;
+  display: grid; place-items: center;
+  background: #fef3c7; border-radius: 14px;
+  font-size: 28px; flex-shrink: 0;
+}
+.guide-head h2 { font-size: 26px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.5px; }
+.guide-sub { color: var(--text-2); font-size: 15px; margin: 0; }
+
+.guide-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 36px;
+  margin-bottom: 32px;
+}
+.guide-col h3 { font-size: 16px; font-weight: 700; margin: 0 0 10px; color: var(--text); }
+.guide-col p { font-size: 14px; color: var(--text-2); margin: 0 0 12px; line-height: 1.65; }
+.guide-col a { color: var(--primary); text-decoration: none; }
+.guide-col a:hover { text-decoration: underline; }
+.guide-col code {
+  background: var(--bg);
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+}
+.steps {
+  margin: 0; padding: 0; list-style: none;
+  counter-reset: step;
+}
+.steps li {
+  position: relative; padding-left: 38px; padding-bottom: 14px;
+  font-size: 14px; color: var(--text-2); line-height: 1.65;
+}
+.steps li::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; left: 0; top: 0;
+  width: 26px; height: 26px;
+  background: var(--primary); color: white;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700;
+}
+.guide-note {
+  font-size: 13px; color: var(--text-3);
+  padding: 12px 14px; background: var(--bg); border-radius: 8px;
+  margin: 12px 0 0;
+}
+
+/* Mock dialog */
+.guide-mockup {
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 24px;
+  margin-top: 24px;
+}
+.mock-dialog {
+  background: #2562c4; color: white;
+  border-radius: 8px; padding: 22px 26px;
+  width: 100%; max-width: 460px;
+  box-shadow: 0 20px 50px rgba(37,98,196,0.3);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+.mock-title { font-size: 20px; font-weight: 600; margin-bottom: 12px; }
+.mock-msg { font-size: 13px; line-height: 1.5; margin: 0 0 14px; opacity: 0.95; }
+.mock-link {
+  display: inline-block;
+  font-size: 13px; color: white; text-decoration: underline;
+  font-weight: 600;
+  padding: 4px 0;
+  position: relative;
+  animation: pulse-highlight 2s ease-in-out infinite;
+}
+@keyframes pulse-highlight {
+  0%, 100% { background: transparent; padding-left: 0; padding-right: 0; }
+  50% { background: rgba(255,255,0,0.35); padding-left: 6px; padding-right: 6px; border-radius: 3px; }
+}
+.mock-extra {
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.18);
+}
+.mock-extra-line { font-size: 12px; margin: 0 0 4px; opacity: 0.9; }
+.mock-buttons { display: flex; gap: 8px; margin-top: 14px; }
+.mock-btn-primary, .mock-btn-secondary {
+  padding: 8px 18px; font-size: 13px; font-weight: 600;
+  border: 1px solid white; border-radius: 2px;
+  cursor: default; font-family: inherit;
+}
+.mock-btn-primary {
+  background: white; color: #2562c4;
+  box-shadow: 0 0 0 0 rgba(255,255,255,0.6);
+  animation: pulse-btn 2s ease-in-out infinite;
+}
+@keyframes pulse-btn {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,0,0); }
+  50% { box-shadow: 0 0 0 6px rgba(255,255,0,0.5); }
+}
+.mock-btn-secondary { background: transparent; color: white; }
+.mock-arrow {
+  font-size: 15px; font-weight: 600; color: var(--primary);
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .guide-body { grid-template-columns: 1fr; gap: 24px; }
+  .guide-mockup { flex-direction: column; gap: 12px; }
+}
+
 /* Features */
 .features { padding: 100px 0; }
 .features h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -1px; text-align: center; margin: 0 0 56px; }

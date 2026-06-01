@@ -49,6 +49,7 @@
           </a>
         </div>
         <p class="micro" id="version-line">Windows 10/11 · ~140 MB · Updates automatically</p>
+        <a class="install-hint" href="#install-guide">Windows shows a security warning?  →  Here's why and how to bypass it</a>
       </div>
 
       <!-- Preview mock -->
@@ -61,6 +62,63 @@
             <div class="preview-canvas">
               <div class="mock-shot"></div>
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install guide -->
+    <section class="install-guide" id="install-guide">
+      <div class="wrap">
+        <div class="guide-card">
+          <div class="guide-head">
+            <div class="shield">🛡️</div>
+            <div>
+              <h2>About the Windows security warning</h2>
+              <p class="guide-sub">Don't worry — this is normal. Here's exactly what to do.</p>
+            </div>
+          </div>
+
+          <div class="guide-body">
+            <div class="guide-col">
+              <h3>Why does it happen?</h3>
+              <p>SnapBeautify is a brand-new app from an independent developer. To remove the warning, an app needs an <strong>EV Code Signing Certificate</strong> (~$300-700/year) — Microsoft charges that fee to large companies like Slack, Discord, and Notion to verify their identity.</p>
+              <p>The app source code is <a href="https://github.com/AI-MasteringDA/snapbeautify" target="_blank" rel="noopener">100% open on GitHub</a> — you can read every line. It's just a screenshot tool. The warning is a generic Windows precaution for any new publisher.</p>
+            </div>
+
+            <div class="guide-col">
+              <h3>How to install in 3 clicks</h3>
+              <ol class="steps">
+                <li>
+                  <strong>Double-click the downloaded</strong> <code>SnapBeautify-Setup.exe</code>
+                </li>
+                <li>
+                  When the blue "<em>Windows protected your PC</em>" dialog appears →<br/>
+                  Click the small "<strong>More info</strong>" link
+                </li>
+                <li>
+                  A new button "<strong>Run anyway</strong>" appears at the bottom → click it → app installs and opens
+                </li>
+              </ol>
+              <p class="guide-note">After the first install, future updates download silently — you'll only see this warning once.</p>
+            </div>
+          </div>
+
+          <div class="guide-mockup">
+            <div class="mock-dialog">
+              <div class="mock-title">Windows protected your PC</div>
+              <p class="mock-msg">Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk.</p>
+              <a class="mock-link">More info</a>
+              <div class="mock-extra">
+                <p class="mock-extra-line">App: <strong>SnapBeautify-Setup.exe</strong></p>
+                <p class="mock-extra-line">Publisher: <strong>Unknown publisher</strong></p>
+                <div class="mock-buttons">
+                  <button class="mock-btn-primary">Run anyway</button>
+                  <button class="mock-btn-secondary">Don't run</button>
+                </div>
+              </div>
+            </div>
+            <div class="mock-arrow">👈 click here</div>
           </div>
         </div>
       </div>
