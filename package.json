@@ -1,7 +1,7 @@
 {
   "name": "snapbeautify",
   "productName": "SnapBeautify",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Beautiful screenshots in seconds — add gradients, shadows, and frames to your screenshots",
   "main": ".vite/build/main.js",
   "private": true,

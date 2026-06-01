@@ -208,14 +208,24 @@ const LeftPanel: React.FC = () => {
             onChange={(e) => store.setPadding(Number(e.target.value))} className="w-full" />
         </div>
 
-        {/* Rounded */}
+        {/* Rounded (image) */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[12px] font-bold text-[#111827] tracking-wide">ROUNDED</span>
+            <span className="text-[12px] font-bold text-[#111827] tracking-wide">ROUNDED (IMAGE)</span>
             <ValBox value={store.rounded} />
           </div>
           <input type="range" min={0} max={48} value={store.rounded}
             onChange={(e) => store.setRounded(Number(e.target.value))} className="w-full" />
+        </div>
+
+        {/* Background rounded */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[12px] font-bold text-[#111827] tracking-wide">ROUNDED (BG)</span>
+            <ValBox value={store.backgroundRounded} />
+          </div>
+          <input type="range" min={0} max={48} value={store.backgroundRounded}
+            onChange={(e) => store.setBackgroundRounded(Number(e.target.value))} className="w-full" />
         </div>
 
         {/* Frame */}

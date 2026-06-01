@@ -38,15 +38,39 @@ export interface Profile {
   settings: Partial<AppState>;
 }
 
-export type DrawTool = 'none' | 'move' | 'pen' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'blur';
+export type DrawTool = 'none' | 'move' | 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'blur';
+
+export interface TextEditState {
+  x: number;
+  y: number;
+  value: string;
+  font: string;
+  size: number;
+  bold: boolean;
+  color: string;
+  // null = creating new text; otherwise = editing existing text annotation
+  targetId: string | null;
+}
+
+export const TEXT_FONTS = [
+  'Inter',
+  'Segoe UI',
+  'Arial',
+  'Georgia',
+  'Courier New',
+  'Comic Sans MS',
+  'Impact',
+] as const;
 
 export type Annotation =
   | { id: string; type: 'pen'; points: number[]; color: string; width: number }
+  | { id: string; type: 'line'; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
   | { id: string; type: 'arrow'; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
   | { id: string; type: 'rect'; x: number; y: number; w: number; h: number; color: string; width: number }
   | { id: string; type: 'ellipse'; x: number; y: number; w: number; h: number; color: string; width: number }
-  | { id: string; type: 'text'; x: number; y: number; text: string; color: string; size: number }
-  | { id: string; type: 'blur'; x: number; y: number; w: number; h: number; radius: number };
+  | { id: string; type: 'text'; x: number; y: number; text: string; color: string; size: number; font: string; bold: boolean }
+  | { id: string; type: 'blur'; x: number; y: number; w: number; h: number; radius: number }
+  | { id: string; type: 'image'; x: number; y: number; w: number; h: number; src: string };
 
 export interface AppState {
   screenshot: string | null;
@@ -59,6 +83,7 @@ export interface AppState {
   shadowSize: number;
   shadowColor: string;
   rounded: number;
+  backgroundRounded: number;
   frame: 'none' | 'macos' | 'windows' | 'browser';
   aspectRatio: 'auto' | '4:3' | '3:2' | '16:9' | '1:1' | 'custom';
   customWidth: number;
@@ -74,6 +99,11 @@ export interface AppState {
   drawTool: DrawTool;
   drawColor: string;
   annotations: Annotation[];
+  selectedAnnotationId: string | null;
+  textFont: string;
+  textSize: number;
+  textBold: boolean;
+  editingText: TextEditState | null;
   darkMode: boolean;
   gradientUserPresets: string[][];
 
@@ -94,6 +124,7 @@ export interface AppState {
   setShadowSize: (v: number) => void;
   setShadowColor: (v: string) => void;
   setRounded: (v: number) => void;
+  setBackgroundRounded: (v: number) => void;
   setFrame: (v: AppState['frame']) => void;
   setAspectRatio: (v: AppState['aspectRatio']) => void;
   setZoom: (v: number) => void;
@@ -106,9 +137,19 @@ export interface AppState {
 
   setDrawTool: (t: DrawTool) => void;
   setDrawColor: (c: string) => void;
+  setTextFont: (f: string) => void;
+  setTextSize: (s: number) => void;
+  setTextBold: (b: boolean) => void;
   addAnnotation: (a: Annotation) => void;
+  updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
+  deleteAnnotation: (id: string) => void;
+  selectAnnotation: (id: string | null) => void;
   undoAnnotation: () => void;
   clearAnnotations: () => void;
+  beginTextEdit: (initial: TextEditState) => void;
+  updateTextEdit: (patch: Partial<TextEditState>) => void;
+  commitTextEdit: () => void;
+  cancelTextEdit: () => void;
   toggleDarkMode: () => void;
 }
 
@@ -133,6 +174,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   shadowSize: 20,
   shadowColor: 'rgba(0,0,0,0.5)',
   rounded: 12,
+  backgroundRounded: 0,
   frame: 'none',
   aspectRatio: 'auto',
   customWidth: 1920,
@@ -148,10 +190,15 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   drawTool: 'none',
   drawColor: '#ef4444',
   annotations: [],
+  selectedAnnotationId: null,
+  textFont: 'Inter',
+  textSize: 22,
+  textBold: true,
+  editingText: null,
   darkMode: false,
   gradientUserPresets: [],
 
-  setScreenshot: (dataURL) => set({ screenshot: dataURL, annotations: [], drawTool: 'none', offsetX: 0, offsetY: 0 }),
+  setScreenshot: (dataURL) => set({ screenshot: dataURL, annotations: [], drawTool: 'none', offsetX: 0, offsetY: 0, selectedAnnotationId: null }),
 
   setBackground: (bg) =>
     set((state) => ({
@@ -202,6 +249,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   setShadowSize: (v) => set({ shadowSize: v }),
   setShadowColor: (v) => set({ shadowColor: v }),
   setRounded: (v) => set({ rounded: v }),
+  setBackgroundRounded: (v) => set({ backgroundRounded: v }),
   setFrame: (v) => set({ frame: v }),
   setAspectRatio: (v) => set({ aspectRatio: v }),
   setZoom: (v) => set({ zoom: Math.max(10, Math.min(200, v)) }),
@@ -258,11 +306,55 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     });
   },
 
-  setDrawTool: (t) => set({ drawTool: t }),
+  setDrawTool: (t) => set({ drawTool: t, selectedAnnotationId: null }),
   setDrawColor: (c) => set({ drawColor: c }),
+  setTextFont: (f) => set({ textFont: f }),
+  setTextSize: (s) => set({ textSize: Math.max(8, Math.min(120, s)) }),
+  setTextBold: (b) => set({ textBold: b }),
   addAnnotation: (a) => set((s) => ({ annotations: [...s.annotations, a] })),
+  updateAnnotation: (id, patch) =>
+    set((s) => ({
+      annotations: s.annotations.map((a) =>
+        a.id === id ? ({ ...a, ...patch } as Annotation) : a,
+      ),
+    })),
+  deleteAnnotation: (id) =>
+    set((s) => ({
+      annotations: s.annotations.filter((a) => a.id !== id),
+      selectedAnnotationId: s.selectedAnnotationId === id ? null : s.selectedAnnotationId,
+    })),
+  selectAnnotation: (id) => set({ selectedAnnotationId: id }),
   undoAnnotation: () => set((s) => ({ annotations: s.annotations.slice(0, -1) })),
-  clearAnnotations: () => set({ annotations: [] }),
+  clearAnnotations: () => set({ annotations: [], selectedAnnotationId: null }),
+
+  beginTextEdit: (initial) => set({ editingText: initial }),
+  updateTextEdit: (patch) =>
+    set((s) => (s.editingText ? { editingText: { ...s.editingText, ...patch } } : ({} as Partial<AppState>))),
+  commitTextEdit: () => {
+    const e = get().editingText;
+    if (!e) return;
+    const trimmed = e.value.trim();
+    if (e.targetId) {
+      const existing = get().annotations.find((a) => a.id === e.targetId);
+      if (!existing) { set({ editingText: null }); return; }
+      if (trimmed) {
+        get().updateAnnotation(e.targetId, {
+          text: e.value, font: e.font, size: e.size, bold: e.bold, color: e.color,
+        } as any);
+      } else {
+        get().deleteAnnotation(e.targetId);
+      }
+    } else if (trimmed) {
+      get().addAnnotation({
+        id: Math.random().toString(36).slice(2, 9),
+        type: 'text',
+        x: e.x, y: e.y, text: e.value,
+        color: e.color, size: e.size, font: e.font, bold: e.bold,
+      });
+    }
+    set({ editingText: null });
+  },
+  cancelTextEdit: () => set({ editingText: null }),
   toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
 }), {
   name: 'snapbeautify-state',
@@ -286,6 +378,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     shadowSize: state.shadowSize,
     shadowColor: state.shadowColor,
     rounded: state.rounded,
+    backgroundRounded: state.backgroundRounded,
     frame: state.frame,
     aspectRatio: state.aspectRatio,
     customWidth: state.customWidth,
@@ -298,5 +391,8 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     darkMode: state.darkMode,
     gradientUserPresets: state.gradientUserPresets,
     drawColor: state.drawColor,
+    textFont: state.textFont,
+    textSize: state.textSize,
+    textBold: state.textBold,
   }),
 }));

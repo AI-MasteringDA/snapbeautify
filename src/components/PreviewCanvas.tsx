@@ -1,11 +1,38 @@
 import React, { useRef, useCallback, useEffect } from 'react';
 import { toPng } from 'html-to-image';
-import { useStore, DrawTool, buildGradient } from '../store';
+import { useStore, DrawTool, buildGradient, TEXT_FONTS } from '../store';
 import AnnotationLayer from './AnnotationLayer';
 
 const PreviewCanvas: React.FC = () => {
   const store = useStore();
   const previewRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAddImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const src = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = previewRef.current;
+        if (!canvas) return;
+        const cw = canvas.clientWidth, ch = canvas.clientHeight;
+        // Default size: max 240px on longest side, preserve aspect ratio.
+        const max = 240;
+        const ratio = img.naturalWidth / img.naturalHeight;
+        let w = max, h = max;
+        if (ratio > 1) h = max / ratio; else w = max * ratio;
+        const x = (cw - w) / 2;
+        const y = (ch - h) / 2;
+        store.addAnnotation({
+          id: Math.random().toString(36).slice(2, 9),
+          type: 'image', x, y, w, h, src,
+        });
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
@@ -22,7 +49,11 @@ const PreviewCanvas: React.FC = () => {
         e.preventDefault();
         s.setDrawTool(s.drawTool === 'move' ? 'none' : 'move');
       } else if (e.key === 'Escape') {
-        if (!typing) s.setDrawTool('none');
+        if (!typing) { s.setDrawTool('none'); s.selectAnnotation(null); }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selectedAnnotationId) {
+        if (typing) return;
+        e.preventDefault();
+        s.deleteAnnotation(s.selectedAnnotationId);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -262,6 +293,9 @@ const PreviewCanvas: React.FC = () => {
     { id: 'pen', title: 'Pen', icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="M2 2l7.586 7.586" /><circle cx="11" cy="11" r="2" /></svg>
     ) },
+    { id: 'line', title: 'Line', icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="19" x2="19" y2="5" /></svg>
+    ) },
     { id: 'arrow', title: 'Arrow', icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
     ) },
@@ -298,7 +332,150 @@ const PreviewCanvas: React.FC = () => {
           );
         })}
 
+        {/* Image upload (one-shot action — not a tool mode) */}
+        <button
+          onClick={() => imageInputRef.current?.click()}
+          title="Add image / logo"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#464555] hover:bg-[#f0f2ff] transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="9" cy="9" r="2" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </button>
+        <input
+          ref={imageInputRef}
+          type="file" accept="image/*" className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleAddImage(file);
+            e.target.value = ''; // allow re-selecting the same file
+          }}
+        />
+
         <div className="w-px h-5 bg-[#e0ddf0] mx-1" />
+
+        {/* Text controls — live-edit when a text is being edited, or edit the selected text, or set defaults for the text tool */}
+        {(() => {
+          const editing = store.editingText;
+          const sel = store.selectedAnnotationId
+            ? store.annotations.find((a) => a.id === store.selectedAnnotationId)
+            : null;
+          const selIsText = sel?.type === 'text';
+          if (!editing && store.drawTool !== 'text' && !selIsText) return null;
+
+          const curFont = editing ? editing.font : selIsText ? (sel as any).font : store.textFont;
+          const curSize = editing ? editing.size : selIsText ? (sel as any).size : store.textSize;
+          const curBold = editing ? editing.bold : selIsText ? (sel as any).bold : store.textBold;
+
+          const setFont = (f: string) => {
+            if (editing) store.updateTextEdit({ font: f });
+            else if (selIsText) store.updateAnnotation((sel as any).id, { font: f } as any);
+            else store.setTextFont(f);
+          };
+          const setSize = (n: number) => {
+            const v = Math.max(8, Math.min(120, n));
+            if (editing) store.updateTextEdit({ size: v });
+            else if (selIsText) store.updateAnnotation((sel as any).id, { size: v } as any);
+            else store.setTextSize(v);
+          };
+          const setBold = (b: boolean) => {
+            if (editing) store.updateTextEdit({ bold: b });
+            else if (selIsText) store.updateAnnotation((sel as any).id, { bold: b } as any);
+            else store.setTextBold(b);
+          };
+
+          return (
+            <>
+              {/* Font */}
+              <select
+                value={curFont}
+                onChange={(e) => setFont(e.target.value)}
+                title="Font"
+                className="h-8 px-2 text-[12px] font-semibold rounded-lg border border-[#d9def0] bg-white text-[#26324a] cursor-pointer outline-none focus:border-[#4f35e8]"
+                style={{ fontFamily: curFont }}
+              >
+                {TEXT_FONTS.map((f) => (
+                  <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+                ))}
+              </select>
+
+              {/* Size +/- with input. onMouseDown preventDefault keeps focus on the
+                  text editor so the user can keep editing after each click. */}
+              <div className="flex items-center h-8 border border-[#d9def0] rounded-lg bg-white overflow-hidden">
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setSize(curSize - 2)}
+                  className="w-6 h-full text-[#464555] hover:bg-[#f0f2ff] text-[14px] font-bold"
+                  title="Smaller"
+                >−</button>
+                <input
+                  type="number" min={8} max={120} value={curSize}
+                  onMouseDown={(e) => editing && e.preventDefault()}
+                  onChange={(e) => setSize(Number(e.target.value))}
+                  className="w-10 h-full text-center text-[12px] font-semibold text-[#111827] tabular-nums outline-none border-x border-[#eef0f7]"
+                />
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setSize(curSize + 2)}
+                  className="w-6 h-full text-[#464555] hover:bg-[#f0f2ff] text-[14px] font-bold"
+                  title="Bigger"
+                >+</button>
+              </div>
+
+              {/* Bold toggle */}
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setBold(!curBold)}
+                title="Bold"
+                className={`w-8 h-8 flex items-center justify-center rounded-lg text-[14px] font-extrabold transition-colors ${
+                  curBold ? 'bg-[#4f35e8] text-white' : 'border border-[#d9def0] bg-white text-[#464555] hover:bg-[#f0f2ff]'
+                }`}
+              >
+                B
+              </button>
+
+              <div className="w-px h-5 bg-[#e0ddf0] mx-1" />
+            </>
+          );
+        })()}
+
+        {/* Image resize (when an image annotation is selected) */}
+        {(() => {
+          const sel = store.selectedAnnotationId
+            ? store.annotations.find((a) => a.id === store.selectedAnnotationId)
+            : null;
+          if (sel?.type !== 'image') return null;
+          const img = sel as any;
+          const scale = (factor: number) => {
+            const nw = Math.max(20, Math.min(4000, img.w * factor));
+            const nh = Math.max(20, Math.min(4000, img.h * factor));
+            const dx = (img.w - nw) / 2;
+            const dy = (img.h - nh) / 2;
+            store.updateAnnotation(img.id, { w: nw, h: nh, x: img.x + dx, y: img.y + dy } as any);
+          };
+          return (
+            <>
+              <div className="flex items-center h-8 border border-[#d9def0] rounded-lg bg-white overflow-hidden">
+                <button
+                  onClick={() => scale(0.9)}
+                  className="w-7 h-full text-[#464555] hover:bg-[#f0f2ff] text-[14px] font-bold"
+                  title="Smaller (−10%)"
+                >−</button>
+                <span className="px-2 text-[11px] font-semibold tabular-nums text-[#111827] border-x border-[#eef0f7] h-full flex items-center">
+                  {Math.round(img.w)}×{Math.round(img.h)}
+                </span>
+                <button
+                  onClick={() => scale(1.1)}
+                  className="w-7 h-full text-[#464555] hover:bg-[#f0f2ff] text-[14px] font-bold"
+                  title="Bigger (+10%)"
+                >+</button>
+              </div>
+              <div className="w-px h-5 bg-[#e0ddf0] mx-1" />
+            </>
+          );
+        })()}
 
         {/* Color swatches */}
         <div className="flex items-center gap-1">
@@ -352,12 +529,13 @@ const PreviewCanvas: React.FC = () => {
           <div
             id="preview-canvas"
             ref={previewRef}
-            className={`relative rounded-[24px] overflow-hidden ${dims.isFixed ? 'w-full h-full' : 'inline-block'}`}
+            className={`relative overflow-hidden ${dims.isFixed ? 'w-full h-full' : 'inline-block'}`}
             style={{
               ...getBgStyle(),
               padding: paddingPx,
               minWidth: 200,
               minHeight: 150,
+              borderRadius: store.backgroundRounded,
             }}
           >
             {dims.isFixed ? (
