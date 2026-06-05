@@ -237,6 +237,18 @@ const LandingScreen: React.FC = () => {
             </svg>
             Browse File
           </button>
+
+          {/* Writing Quotes */}
+          <button
+            onClick={() => useStore.getState().enterQuoteMode()}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-[#c7c4d8] hover:bg-[#f0f2ff] transition-colors text-[#464555] text-[13px] font-medium"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 21v-4l11-11 4 4-11 11H3z" />
+              <path d="M14 7l3-3 4 4-3 3" />
+            </svg>
+            Writing Quotes
+          </button>
         </div>
 
         {/* Hint */}

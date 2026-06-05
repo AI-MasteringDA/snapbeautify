@@ -1,5 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { useStore, GRADIENT_PRESETS, buildGradient } from '../store';
+import React, { useState, useEffect, useRef } from 'react';
+import { useStore, GRADIENT_PRESETS, buildGradient, CtaChannel, CTA_LABELS } from '../store';
+import bg1 from '../assets/backgrounds/bg1.png';
+import bg2 from '../assets/backgrounds/bg2.png';
+import bg3 from '../assets/backgrounds/bg3.png';
+import bg4 from '../assets/backgrounds/bg4.png';
+import bg5 from '../assets/backgrounds/bg5.png';
+import { TEMPLATES as QUOTE_TEMPLATES, ASPECT_RATIOS as QUOTE_ASPECTS, getMeta as getQuoteMeta } from './quoteTemplates';
+
+const IMAGE_PRESETS: string[] = [bg1, bg2, bg3, bg4, bg5];
+
+const ALL_FONTS = ['Inter', 'Segoe UI', 'Arial', 'Georgia', 'Courier New', 'Comic Sans MS', 'Impact', 'Playfair Display', 'Permanent Marker', 'Roboto Slab', 'Dancing Script', 'Caveat', 'Bebas Neue', 'Architects Daughter'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +69,9 @@ const LeftPanel: React.FC = () => {
   const [showProfileInput, setShowProfileInput] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showCtaAdvanced, setShowCtaAdvanced] = useState(false);
   const [appVersion, setAppVersion] = useState('');
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     window.electronAPI?.getVersion?.().then(setAppVersion).catch(() => setAppVersion(''));
@@ -157,6 +169,186 @@ const LeftPanel: React.FC = () => {
 
       {/* ── Scrollable content ─────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4">
+
+        {/* ───────── QUOTE MODE — text, author, template, aspect, customize ───────── */}
+        {store.quoteMode && (() => {
+          const q = store.quote;
+          const meta = getQuoteMeta(q.template);
+          const eff = {
+            font: q.font ?? meta.defaultFont,
+            size: q.fontSize ?? meta.defaultSize,
+            color: q.textColor ?? meta.defaultColor,
+            bold: q.textBold ?? meta.defaultBold,
+            authorSize: q.authorSize ?? meta.defaultAuthorSize ?? 16,
+          };
+          return (
+            <>
+              <SectionTitle>Quote Text</SectionTitle>
+              <textarea
+                value={q.text}
+                onChange={(e) => store.setQuote({ text: e.target.value })}
+                placeholder="Paste or type your quote…"
+                rows={5}
+                className="w-full px-3 py-2.5 text-[13px] border border-[#d9def0] rounded-lg bg-white text-[#1f2937] outline-none focus:border-[#4f35e8] resize-none mb-3"
+              />
+              <p className="text-[10px] font-bold tracking-[1.2px] text-[#70768c] uppercase mb-1.5">Author</p>
+              <input
+                type="text" value={q.author}
+                onChange={(e) => store.setQuote({ author: e.target.value })}
+                placeholder="Steve Jobs"
+                className="w-full px-3 py-2 text-[13px] border border-[#d9def0] rounded-lg bg-white text-[#1f2937] outline-none focus:border-[#4f35e8] mb-1"
+              />
+
+              <SectionDivider />
+
+              {/* Templates */}
+              <SectionTitle>Style</SectionTitle>
+              <div className="grid grid-cols-2 gap-2 mb-1">
+                {QUOTE_TEMPLATES.map((t) => {
+                  const active = q.template === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => store.setQuote({ template: t.id, font: undefined, fontSize: undefined, textColor: undefined, textBold: undefined, authorSize: undefined })}
+                      title={t.label}
+                      className="rounded-lg overflow-hidden transition-all hover:scale-[1.03]"
+                      style={{
+                        outline: active ? '2.5px solid #4f35e8' : '1px solid #e3e6f5',
+                        outlineOffset: active ? '2px' : '0',
+                        aspectRatio: '5 / 4',
+                        ...t.swatch,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, padding: 4, textAlign: 'center', overflow: 'hidden',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <SectionDivider />
+
+              {/* Aspect */}
+              <SectionTitle>Aspect</SectionTitle>
+              <div className="grid grid-cols-2 gap-2 mb-1">
+                {QUOTE_ASPECTS.map((a) => {
+                  const active = q.aspect === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => store.setQuote({ aspect: a.id })}
+                      className={`py-1.5 text-[11px] font-semibold rounded-lg border transition-all ${
+                        active ? 'bg-[#4f35e8] text-white border-[#4f35e8]' : 'border-[#d9def0] text-[#26324a] bg-white hover:bg-[#f0f2ff]'
+                      }`}
+                    >{a.label}</button>
+                  );
+                })}
+              </div>
+
+              <SectionDivider />
+
+              {/* Customize */}
+              <SectionTitle>Customize</SectionTitle>
+              <div className="flex flex-col gap-3 mb-1">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#26324a] mb-1.5">Font</label>
+                  <select
+                    value={eff.font}
+                    onChange={(e) => store.setQuote({ font: e.target.value })}
+                    className="w-full px-2.5 h-9 text-[12px] border border-[#d9def0] rounded-lg bg-white text-[#1f2937] cursor-pointer outline-none focus:border-[#4f35e8]"
+                    style={{ fontFamily: eff.font }}
+                  >
+                    {ALL_FONTS.map((f) => (
+                      <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-semibold text-[#26324a] mb-1.5">Size · {Math.round(eff.size)}px</label>
+                    <input type="range" min={16} max={120} value={eff.size}
+                      onChange={(e) => store.setQuote({ fontSize: Number(e.target.value) })}
+                      className="w-full" />
+                  </div>
+                  <button
+                    onClick={() => store.setQuote({ textBold: !eff.bold })}
+                    title="Bold"
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg text-[14px] font-extrabold transition-colors ${
+                      eff.bold ? 'bg-[#4f35e8] text-white' : 'border border-[#d9def0] bg-white text-[#464555] hover:bg-[#f0f2ff]'
+                    }`}
+                  >B</button>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#26324a] mb-1.5">Author Size · {Math.round(eff.authorSize)}px</label>
+                  <input type="range" min={10} max={60} value={eff.authorSize}
+                    onChange={(e) => store.setQuote({ authorSize: Number(e.target.value) })}
+                    className="w-full" />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#26324a] mb-1.5">Text Color</label>
+                  <div className="flex items-center gap-2">
+                    <label className="relative cursor-pointer rounded-md overflow-hidden border border-[#d9def0] shrink-0" style={{ width: 28, height: 28 }}>
+                      <span className="absolute inset-0" style={{ background: eff.color }} />
+                      <input type="color" value={eff.color} onChange={(e) => store.setQuote({ textColor: e.target.value })} className="opacity-0 absolute inset-0 w-full h-full cursor-pointer" />
+                    </label>
+                    <span className="text-[11px] font-mono text-[#26324a]">{eff.color.toUpperCase()}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#26324a] mb-1.5">Highlighted Words <span className="text-[#9592ab] font-medium">(space-separated)</span></label>
+                  <input
+                    type="text"
+                    value={q.highlightWords ?? ''}
+                    onChange={(e) => store.setQuote({ highlightWords: e.target.value })}
+                    placeholder="permission yours no"
+                    className="w-full px-2.5 py-1.5 text-[12px] border border-[#d9def0] rounded-lg bg-white text-[#1f2937] outline-none focus:border-[#4f35e8]"
+                  />
+                </div>
+
+                {/* Position offsets X/Y — manual move (sliders) */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#26324a] mb-1.5">
+                    Position X · {Math.round(q.textOffsetX ?? 0)}%
+                  </label>
+                  <input
+                    type="range" min={-50} max={50} step={1}
+                    value={q.textOffsetX ?? 0}
+                    onChange={(e) => store.setQuote({ textOffsetX: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#26324a] mb-1.5">
+                    Position Y · {Math.round(q.textOffsetY ?? 0)}%
+                  </label>
+                  <input
+                    type="range" min={-50} max={50} step={1}
+                    value={q.textOffsetY ?? 0}
+                    onChange={(e) => store.setQuote({ textOffsetY: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+
+                <button
+                  onClick={() => store.setQuote({ font: undefined, fontSize: undefined, textColor: undefined, textBold: undefined, authorSize: undefined, textOffsetX: undefined, textOffsetY: undefined })}
+                  className="text-[11px] font-semibold text-[#4f35e8] hover:underline self-start"
+                >
+                  Reset (font, size, position…)
+                </button>
+              </div>
+
+              <SectionDivider />
+            </>
+          );
+        })()}
+
+        {/* ───────── SCREENSHOT MODE sections — hidden in quote mode ───────── */}
+        {!store.quoteMode && <>
 
         {/* LAYOUT */}
         <SectionTitle>Layout</SectionTitle>
@@ -478,27 +670,193 @@ const LeftPanel: React.FC = () => {
           </div>
         )}
 
-        {/* Image upload */}
+        {/* Image presets + upload */}
         {bgTab === 'image' && (
-          <label className="flex flex-col items-center justify-center gap-2 py-6 rounded-lg border-2 border-dashed border-[#d9def0] hover:border-[#4f35e8] hover:bg-[#f0f2ff] cursor-pointer transition-all">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9592ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-            <span className="text-[12px] text-[#9592ab] font-semibold">Click to upload image</span>
+          <div className="flex flex-col gap-3">
+            {/* Preset thumbnails */}
+            <div className="grid grid-cols-3 gap-2">
+              {IMAGE_PRESETS.map((url, i) => {
+                const active = bg.type === 'image' && bg.imageUrl === url;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => store.setBackground({ type: 'image', imageUrl: url })}
+                    title={`Preset ${i + 1}`}
+                    className="aspect-square rounded-lg overflow-hidden transition-all hover:scale-[1.03]"
+                    style={{
+                      outline: active ? '2.5px solid #4f35e8' : '1px solid #e3e6f5',
+                      outlineOffset: active ? '2px' : '0',
+                    }}
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" draggable={false} />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Upload custom */}
+            <label className="flex flex-col items-center justify-center gap-2 py-5 rounded-lg border-2 border-dashed border-[#d9def0] hover:border-[#4f35e8] hover:bg-[#f0f2ff] cursor-pointer transition-all">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9592ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              <span className="text-[12px] text-[#9592ab] font-semibold">Upload your own</span>
+              <input
+                type="file" accept="image/*" className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) =>
+                    store.setBackground({ type: 'image', imageUrl: ev.target?.result as string });
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </label>
+          </div>
+        )}
+
+        <SectionDivider />
+
+        </>}
+
+        {/* BRANDING (Logo + CTA) — shown in both quote and screenshot modes */}
+        <SectionTitle>Branding</SectionTitle>
+
+        {/* Show Logo row */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[13px] font-medium text-[#26324a]">Show Logo</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => logoInputRef.current?.click()}
+              title={store.logo.src ? 'Replace logo' : 'Upload custom logo'}
+              className="text-[11px] font-semibold text-[#4f35e8] hover:underline"
+            >
+              {store.logo.src ? 'Replace' : 'Upload'}
+            </button>
+            <button
+              onClick={() => store.setLogoEnabled(!store.logo.enabled)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${store.logo.enabled ? 'bg-[#4f35e8]' : 'bg-[#d9def0]'}`}
+            >
+              <span
+                className={`absolute top-[2px] w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${store.logo.enabled ? 'translate-x-[18px]' : 'translate-x-[2px]'}`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Logo size + reset (only when logo enabled) */}
+        {store.logo.enabled && (
+          <div className="mb-3 pl-1">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] text-[#70768c]">Size · {Math.round(store.logo.scale * 100)}%</span>
+              <button
+                onClick={() => { store.setLogoScale(1); store.setLogoPosition(0, 0); }}
+                className="text-[10px] font-semibold text-[#4f35e8] hover:underline"
+                title="Reset size + position"
+              >
+                Reset
+              </button>
+            </div>
             <input
-              type="file" accept="image/*" className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) =>
-                  store.setBackground({ type: 'image', imageUrl: ev.target?.result as string });
-                reader.readAsDataURL(file);
-              }}
+              type="range" min={30} max={300} step={5}
+              value={Math.round(store.logo.scale * 100)}
+              onChange={(e) => store.setLogoScale(Number(e.target.value) / 100)}
+              className="w-full"
             />
-          </label>
+          </div>
+        )}
+        <input
+          ref={logoInputRef}
+          type="file" accept="image/*" className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              store.setLogoSrc(ev.target?.result as string);
+              store.setLogoEnabled(true);
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+          }}
+        />
+
+        {/* Show CTA row */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[13px] font-medium text-[#26324a]">Show CTA</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCtaAdvanced((v) => !v)}
+              title="Advanced CTA settings"
+              className="text-[11px] font-semibold text-[#4f35e8] hover:underline"
+            >
+              {showCtaAdvanced ? 'Hide' : 'Advanced'}
+            </button>
+            <button
+              onClick={() => store.setCtaEnabled(!store.cta.enabled)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${store.cta.enabled ? 'bg-[#4f35e8]' : 'bg-[#d9def0]'}`}
+            >
+              <span
+                className={`absolute top-[2px] w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${store.cta.enabled ? 'translate-x-[18px]' : 'translate-x-[2px]'}`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* CTA size + reset (only when CTA enabled) */}
+        {store.cta.enabled && (
+          <div className="mb-1 pl-1">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] text-[#70768c]">Size · {Math.round(store.cta.scale * 100)}%</span>
+              <button
+                onClick={() => { store.setCtaScale(1); store.setCtaPosition(0, 0); }}
+                className="text-[10px] font-semibold text-[#4f35e8] hover:underline"
+                title="Reset size + position"
+              >
+                Reset
+              </button>
+            </div>
+            <input
+              type="range" min={30} max={300} step={5}
+              value={Math.round(store.cta.scale * 100)}
+              onChange={(e) => store.setCtaScale(Number(e.target.value) / 100)}
+              className="w-full"
+            />
+          </div>
+        )}
+
+        {/* Advanced CTA — per-channel toggle + value, stacked layout */}
+        {showCtaAdvanced && (
+          <div className="mt-3 p-3 rounded-lg bg-[#f8f7ff] border border-[#eef0f7] flex flex-col gap-2.5">
+            <p className="text-[10px] font-bold tracking-[1.2px] text-[#70768c] uppercase">CTA Channels</p>
+            {(Object.keys(CTA_LABELS) as CtaChannel[]).map((key) => {
+              const cfg = store.cta.channels[key];
+              return (
+                <div key={key} className="rounded-md border border-[#eef0f7] bg-white p-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-[#26324a]">{CTA_LABELS[key]}</span>
+                    <button
+                      onClick={() => store.setCtaChannel(key, { on: !cfg.on })}
+                      className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${cfg.on ? 'bg-[#4f35e8]' : 'bg-[#d9def0]'}`}
+                      title={cfg.on ? 'Hide' : 'Show'}
+                    >
+                      <span
+                        className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full shadow-sm transition-transform ${cfg.on ? 'translate-x-[16px]' : 'translate-x-[2px]'}`}
+                      />
+                    </button>
+                  </div>
+                  <input
+                    type="text" value={cfg.value}
+                    onChange={(e) => store.setCtaChannel(key, { value: e.target.value })}
+                    placeholder={CTA_LABELS[key]}
+                    className="w-full px-2 py-1 text-[11px] border border-[#d9def0] rounded-md bg-white text-[#1f2937] outline-none focus:border-[#4f35e8]"
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
 
         <div className="h-1" />

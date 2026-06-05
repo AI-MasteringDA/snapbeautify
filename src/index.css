@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Quote Studio fonts (Google Fonts) */
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Permanent+Marker&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Bebas+Neue&family=Architects+Daughter&family=Dancing+Script:wght@500;700&family=Roboto+Slab:wght@400;700;900&display=swap');
+
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   overflow: hidden;

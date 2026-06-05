@@ -1,9 +1,18 @@
 import React from 'react';
+import { useStore } from '../store';
 
 const TitleBarEditor: React.FC = () => {
+  const quoteMode = useStore((s) => s.quoteMode);
+  const exitQuoteMode = useStore((s) => s.exitQuoteMode);
+  const setScreenshot = useStore((s) => s.setScreenshot);
   const handleMinimize = () => window.electronAPI.minimizeWindow();
   const handleMaximize = () => window.electronAPI.maximizeWindow();
   const handleClose = () => window.electronAPI.closeWindow();
+  const handleBack = () => {
+    // Quote mode: just exit; screenshot mode: clear screenshot to go back to landing.
+    if (quoteMode) exitQuoteMode();
+    else useStore.setState({ screenshot: null, annotations: [], drawTool: 'none' });
+  };
 
   return (
     <div
@@ -13,25 +22,36 @@ const TitleBarEditor: React.FC = () => {
         WebkitAppRegion: 'drag',
       } as React.CSSProperties}
     >
-      {/* Left: logo + name */}
+      {/* Left: back + logo + name */}
       <div
         className="flex items-center gap-2"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#3525cd"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-[#f0f2ff] text-[#464555] text-[12px] font-medium transition-colors"
+          title="Back to home"
         >
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-          <circle cx="12" cy="13" r="4" />
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Back
+        </button>
+        <div className="w-px h-4 bg-[#e8eaf6]" />
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3525cd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {quoteMode ? (
+            <>
+              <path d="M3 21v-4l11-11 4 4-11 11H3z" />
+              <path d="M14 7l3-3 4 4-3 3" />
+            </>
+          ) : (
+            <>
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </>
+          )}
         </svg>
-        <span className="text-sm font-semibold text-[#131b2e] tracking-wide">SnapBeautify</span>
+        <span className="text-sm font-semibold text-[#131b2e] tracking-wide">{quoteMode ? 'Quote Studio' : 'SnapBeautify'}</span>
       </div>
 
       {/* Center: spacer */}

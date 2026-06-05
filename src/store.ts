@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-// Each preset is a list of color stops (Savvy-style vibrant gradients).
+// First 3 are the popular FB-style gradients people pick most often.
 export const GRADIENT_PRESETS: string[][] = [
+  ['#FF512F', '#DD2476'],                       // Sunset (orange→magenta)
+  ['#8E2DE2', '#4A00E0'],                       // Royal purple
+  ['#FF8008', '#FFC837'],                       // Tropical orange-yellow
   ['#3a1c71', '#d76d77', '#ffaf7b'],
   ['#0f2027', '#203a43', '#2c5364'],
   ['#f7971e', '#ffd200', '#21d4fd'],
@@ -40,6 +43,44 @@ export interface Profile {
 
 export type DrawTool = 'none' | 'move' | 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'blur';
 
+// ─── Quote Studio ───────────────────────────────────────────────────────────
+// Each template is a complete visual style: a background, a paired font, default
+// text color, alignment, and layout. Selecting a template fills in sensible
+// defaults; the user may then override font/size/bold/color via the inline
+// toolbar that appears when they click the text in the preview.
+export type QuoteTemplateId =
+  | 'lamp'            // Dark wall + desk lamp spotlight — "Don't wish for it…" (DEFAULT)
+  | 'silk'            // White silk satin — "stay focused" bold sans
+  | 'abundant'        // Torn-paper blue with brand header
+  | 'bird'            // Cream + hand-drawn + blue highlights + bird
+  | 'brush'           // Cream + brushstroke watercolor
+  | 'bold-white'
+  | 'serif-gray'
+  | 'cream-highlight'
+  | 'dark-mixed'
+  | 'tweet-card'
+  | 'gradient-white'
+  | 'marker-caps'
+  ;
+
+export type QuoteAspect = '1:1' | '4:5' | '16:9' | '9:16';
+
+// All optional fields are user overrides — undefined = use the template's default.
+export interface QuoteState {
+  text: string;
+  author: string;
+  template: QuoteTemplateId;
+  aspect: QuoteAspect;
+  font?: string;
+  fontSize?: number;
+  textColor?: string;
+  textBold?: boolean;
+  authorSize?: number; // px override for author line
+  highlightWords?: string; // space-separated; used by templates that highlight key words
+  textOffsetX?: number; // -100..100, percent of canvas width
+  textOffsetY?: number; // -100..100, percent of canvas height
+}
+
 export interface TextEditState {
   x: number;
   y: number;
@@ -51,6 +92,38 @@ export interface TextEditState {
   // null = creating new text; otherwise = editing existing text annotation
   targetId: string | null;
 }
+
+export type CtaChannel = 'website' | 'zalo' | 'email' | 'fb' | 'ig' | 'li';
+
+export interface CtaChannelConfig {
+  on: boolean;
+  value: string;
+}
+
+export interface CtaConfig {
+  enabled: boolean;
+  channels: Record<CtaChannel, CtaChannelConfig>;
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+}
+
+export interface LogoConfig {
+  enabled: boolean;
+  src: string; // empty = use bundled MDA logo
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+}
+
+export const CTA_LABELS: Record<CtaChannel, string> = {
+  website: 'Website',
+  zalo: 'Zalo',
+  email: 'Email',
+  fb: 'Facebook',
+  ig: 'Instagram',
+  li: 'LinkedIn',
+};
 
 export const TEXT_FONTS = [
   'Inter',
@@ -105,6 +178,10 @@ export interface AppState {
   textBold: boolean;
   editingText: TextEditState | null;
   darkMode: boolean;
+  logo: LogoConfig;
+  cta: CtaConfig;
+  quoteMode: boolean;
+  quote: QuoteState;
   gradientUserPresets: string[][];
 
   setScreenshot: (dataURL: string) => void;
@@ -151,6 +228,17 @@ export interface AppState {
   commitTextEdit: () => void;
   cancelTextEdit: () => void;
   toggleDarkMode: () => void;
+  setLogoEnabled: (b: boolean) => void;
+  setLogoSrc: (src: string) => void;
+  setLogoPosition: (x: number, y: number) => void;
+  setLogoScale: (s: number) => void;
+  setCtaEnabled: (b: boolean) => void;
+  setCtaChannel: (channel: CtaChannel, patch: Partial<CtaChannelConfig>) => void;
+  setCtaPosition: (x: number, y: number) => void;
+  setCtaScale: (s: number) => void;
+  enterQuoteMode: () => void;
+  exitQuoteMode: () => void;
+  setQuote: (patch: Partial<QuoteState>) => void;
 }
 
 const DEFAULT_BACKGROUND: BackgroundConfig = {
@@ -197,6 +285,28 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   editingText: null,
   darkMode: false,
   gradientUserPresets: [],
+  logo: { enabled: false, src: '', offsetX: 0, offsetY: 0, scale: 1 },
+  cta: {
+    enabled: false,
+    channels: {
+      website: { on: true, value: 'www.mastering-da.com' },
+      zalo: { on: true, value: '0961 48 66 48' },
+      email: { on: true, value: 'sales@mastering-da.com' },
+      fb: { on: false, value: 'facebook.com/masteringda' },
+      ig: { on: false, value: '@masteringda' },
+      li: { on: false, value: 'linkedin.com/company/mda' },
+    },
+    offsetX: 0,
+    offsetY: 0,
+    scale: 1,
+  },
+  quoteMode: false,
+  quote: {
+    text: 'Don\'t wish for it,\nwork for it',
+    author: '',
+    template: 'lamp',
+    aspect: '16:9',
+  },
 
   setScreenshot: (dataURL) => set({ screenshot: dataURL, annotations: [], drawTool: 'none', offsetX: 0, offsetY: 0, selectedAnnotationId: null }),
 
@@ -356,6 +466,25 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   },
   cancelTextEdit: () => set({ editingText: null }),
   toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
+
+  setLogoEnabled: (b) => set((s) => ({ logo: { ...s.logo, enabled: b } })),
+  setLogoSrc: (src) => set((s) => ({ logo: { ...s.logo, src } })),
+  setLogoPosition: (x, y) => set((s) => ({ logo: { ...s.logo, offsetX: x, offsetY: y } })),
+  setLogoScale: (scale) => set((s) => ({ logo: { ...s.logo, scale: Math.max(0.3, Math.min(3, scale)) } })),
+  setCtaEnabled: (b) => set((s) => ({ cta: { ...s.cta, enabled: b } })),
+  setCtaChannel: (channel, patch) =>
+    set((s) => ({
+      cta: {
+        ...s.cta,
+        channels: { ...s.cta.channels, [channel]: { ...s.cta.channels[channel], ...patch } },
+      },
+    })),
+  setCtaPosition: (x, y) => set((s) => ({ cta: { ...s.cta, offsetX: x, offsetY: y } })),
+  setCtaScale: (scale) => set((s) => ({ cta: { ...s.cta, scale: Math.max(0.3, Math.min(3, scale)) } })),
+
+  enterQuoteMode: () => set({ quoteMode: true }),
+  exitQuoteMode: () => set({ quoteMode: false }),
+  setQuote: (patch) => set((s) => ({ quote: { ...s.quote, ...patch } })),
 }), {
   name: 'snapbeautify-state',
   storage: createJSONStorage(() => localStorage),
@@ -367,6 +496,21 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     }
     return persisted;
   },
+  // Deep-merge persisted nested objects with initial state so any newly-added
+  // field (e.g. logo.scale, cta.scale) keeps its default value when an older
+  // persisted state is rehydrated.
+  merge: (persisted: any, current: any) => ({
+    ...current,
+    ...persisted,
+    background: { ...current.background, ...(persisted?.background ?? {}) },
+    logo: { ...current.logo, ...(persisted?.logo ?? {}) },
+    cta: {
+      ...current.cta,
+      ...(persisted?.cta ?? {}),
+      channels: { ...current.cta.channels, ...(persisted?.cta?.channels ?? {}) },
+    },
+    quote: { ...current.quote, ...(persisted?.quote ?? {}) },
+  }),
   // Only persist user settings; skip transient/per-screenshot state.
   partialize: (state) => ({
     background: state.background,
@@ -394,5 +538,8 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     textFont: state.textFont,
     textSize: state.textSize,
     textBold: state.textBold,
+    logo: state.logo,
+    cta: state.cta,
+    quote: state.quote,
   }),
 }));

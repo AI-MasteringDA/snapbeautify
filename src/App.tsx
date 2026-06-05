@@ -6,22 +6,26 @@ import EditorScreen from './components/EditorScreen';
 
 const App: React.FC = () => {
   const screenshot = useStore((s) => s.screenshot);
+  const quoteMode = useStore((s) => s.quoteMode);
   const setScreenshot = useStore((s) => s.setScreenshot);
 
   useEffect(() => {
-    // Listen for screenshots from main process (global shortcut / tray)
     window.electronAPI.onScreenshotReady((dataURL) => {
       setScreenshot(dataURL);
     });
-
     return () => {
       window.electronAPI.removeScreenshotListener();
     };
   }, [setScreenshot]);
 
+  // Quote mode and screenshot mode both use EditorScreen — same toolbar,
+  // annotation layer, Logo/CTA overlays, export — only the canvas content
+  // and a few sidebar sections differ.
+  const showEditor = quoteMode || !!screenshot;
+
   return (
     <div className="flex flex-col h-screen bg-[#faf8ff] text-[#131b2e] select-none">
-      {screenshot ? (
+      {showEditor ? (
         <EditorScreen />
       ) : (
         <>

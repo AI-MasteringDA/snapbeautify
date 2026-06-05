@@ -1,12 +1,44 @@
 import React, { useRef, useCallback, useEffect } from 'react';
 import { toPng } from 'html-to-image';
-import { useStore, DrawTool, buildGradient, TEXT_FONTS } from '../store';
+import { useStore, DrawTool, buildGradient, TEXT_FONTS, CtaChannel } from '../store';
+import logoMdaUrl from '../assets/logo-mda.png';
+import { ASPECT_RATIOS as QUOTE_ASPECTS, getMeta as getQuoteMeta, renderQuoteTemplate } from './quoteTemplates';
 import AnnotationLayer from './AnnotationLayer';
+
+interface DragRef { sx: number; sy: number; ox: number; oy: number; target: 'logo' | 'cta'; }
 
 const PreviewCanvas: React.FC = () => {
   const store = useStore();
   const previewRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [overlayDrag, setOverlayDrag] = React.useState<DragRef | null>(null);
+  const [exporting, setExporting] = React.useState(false);
+
+  const isMoveTool = store.drawTool === 'move';
+  // Hide the dashed outline (UI-only) while exporting so it doesn't leak into PNG/clipboard.
+  const showOverlayOutline = isMoveTool && !exporting;
+  const overlayZ = isMoveTool ? 6 : 4; // above AnnotationLayer (z 5) when hand tool active
+
+  // Document-level pointer listeners — reliable across re-renders & tool changes
+  React.useEffect(() => {
+    if (!overlayDrag) return;
+    const onMove = (e: PointerEvent) => {
+      const scale = store.zoom / 100;
+      const nx = overlayDrag.ox + (e.clientX - overlayDrag.sx) / scale;
+      const ny = overlayDrag.oy + (e.clientY - overlayDrag.sy) / scale;
+      if (overlayDrag.target === 'logo') store.setLogoPosition(nx, ny);
+      else store.setCtaPosition(nx, ny);
+    };
+    const onUp = () => setOverlayDrag(null);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    return () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+    };
+  }, [overlayDrag, store]);
 
   const handleAddImage = (file: File) => {
     const reader = new FileReader();
@@ -62,6 +94,18 @@ const PreviewCanvas: React.FC = () => {
 
   // ── Compute canvas dimensions from aspect ratio ────────────────────────
   const getCanvasDimensions = () => {
+    // Quote mode: use the quote template's aspect, fit into the window.
+    if (store.quoteMode) {
+      const qa = QUOTE_ASPECTS.find((a) => a.id === store.quote.aspect) ?? QUOTE_ASPECTS[0];
+      const r = qa.w / qa.h;
+      const maxW = window.innerWidth * 0.55;
+      const maxH = window.innerHeight * 0.78;
+      let width = maxW;
+      let height = width / r;
+      if (height > maxH) { height = maxH; width = height * r; }
+      return { width: `${width}px`, height: `${height}px`, isFixed: true };
+    }
+
     const ratios: Record<string, [number, number]> = {
       'auto': [0, 0],
       '4:3': [4, 3],
@@ -126,20 +170,28 @@ const PreviewCanvas: React.FC = () => {
   // ── Export handlers ────────────────────────────────────────────────────
   const exportImage = useCallback(async (): Promise<string | null> => {
     if (!previewRef.current) return null;
+    setExporting(true);
+    // Give React one frame to re-render with the outline suppressed.
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
     try {
-      // Adaptive pixelRatio: export so the embedded screenshot keeps its full
-      // native resolution. clientWidth is the unscaled layout width (CSS zoom
-      // transform on the ancestor doesn't affect it).
-      let pixelRatio = 3;
-      const img = previewRef.current.querySelector('img');
-      if (img && img.naturalWidth && img.clientWidth) {
-        const needed = img.naturalWidth / img.clientWidth;
-        pixelRatio = Math.min(5, Math.max(3, needed));
+      // Aim for 4K output but NEVER upscale the screenshot beyond its native
+      // resolution — bilinear upscaling is what was causing the visible blur.
+      // Result: the screenshot stays pixel-perfect; the gradient/padding/logo
+      // render crisp because they're vector / high-res.
+      const canvasWidth = previewRef.current.clientWidth || 1;
+      let pixelRatio = Math.max(4, 3840 / canvasWidth);
+      const shotImg = previewRef.current.querySelector('img');
+      if (shotImg?.naturalWidth && shotImg.clientWidth) {
+        const sourceMax = shotImg.naturalWidth / shotImg.clientWidth; // 1.0 = exactly native
+        pixelRatio = Math.min(pixelRatio, sourceMax);
       }
+      pixelRatio = Math.max(2, Math.min(8, pixelRatio));
       return await toPng(previewRef.current, { cacheBust: true, pixelRatio });
     } catch (err) {
       console.error('Export failed:', err);
       return null;
+    } finally {
+      setExporting(false);
     }
   }, []);
 
@@ -158,7 +210,8 @@ const PreviewCanvas: React.FC = () => {
   };
 
   const handleNewScreenshot = () => {
-    useStore.setState({ screenshot: null, annotations: [], drawTool: 'none' });
+    // Exits whichever mode is active (quote or screenshot) back to landing.
+    useStore.setState({ screenshot: null, annotations: [], drawTool: 'none', quoteMode: false });
   };
 
   // ── Canvas padding conversion ──────────────────────────────────────────
@@ -225,7 +278,8 @@ const PreviewCanvas: React.FC = () => {
           maxHeight: imgBox.maxHeight,
           userSelect: 'none',
           pointerEvents: 'none',
-        }}
+          imageRendering: '-webkit-optimize-contrast',
+        } as React.CSSProperties}
         draggable={false}
       />
     );
@@ -254,7 +308,8 @@ const PreviewCanvas: React.FC = () => {
               borderRadius: insetPx > 0 ? Math.max(0, store.rounded - insetPx) : store.rounded,
               userSelect: 'none',
               pointerEvents: 'none',
-            }}
+              imageRendering: '-webkit-optimize-contrast',
+            } as React.CSSProperties}
             draggable={false}
           />
         </div>
@@ -525,20 +580,31 @@ const PreviewCanvas: React.FC = () => {
             ...(dims.isFixed ? { width: dims.width, height: dims.height } : {}),
           }}
         >
-          {/* The actual exported div */}
+          {/* The actual exported div.
+              Quote mode: no padding/bg/frame — template controls its own look.
+              Screenshot mode: gradient/solid/image bg + padding around screenshot. */}
           <div
             id="preview-canvas"
             ref={previewRef}
             className={`relative overflow-hidden ${dims.isFixed ? 'w-full h-full' : 'inline-block'}`}
             style={{
-              ...getBgStyle(),
-              padding: paddingPx,
+              ...(store.quoteMode ? {} : getBgStyle()),
+              padding: store.quoteMode ? 0 : paddingPx,
               minWidth: 200,
               minHeight: 150,
-              borderRadius: store.backgroundRounded,
+              borderRadius: store.quoteMode ? 0 : store.backgroundRounded,
             }}
           >
-            {dims.isFixed ? (
+            {store.quoteMode ? (
+              /* Quote template — fills the canvas (template uses px width/height
+                  to scale fonts correctly relative to its 600px design baseline). */
+              (() => {
+                const meta = getQuoteMeta(store.quote.template);
+                const w = parseFloat(String(dims.width)) || 600;
+                const h = parseFloat(String(dims.height)) || 600;
+                return renderQuoteTemplate({ quote: store.quote, meta, width: w, height: h });
+              })()
+            ) : dims.isFixed ? (
               /* Fixed aspect ratio → fill padded area, center image */
               <div
                 className="relative w-full h-full flex items-center justify-center"
@@ -552,6 +618,118 @@ const PreviewCanvas: React.FC = () => {
                 {store.screenshot && renderScreenshot({ maxWidth: maxAutoW, maxHeight: maxAutoH })}
               </div>
             )}
+
+            {/* Logo overlay (top-right; draggable + scalable with hand tool) */}
+            {store.logo.enabled && (
+              <div
+                onPointerDown={(e) => {
+                  if (!isMoveTool) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setOverlayDrag({
+                    sx: e.clientX, sy: e.clientY,
+                    ox: store.logo.offsetX, oy: store.logo.offsetY,
+                    target: 'logo',
+                  });
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 16, right: 16,
+                  transform: `translate(${store.logo.offsetX}px, ${store.logo.offsetY}px) scale(${store.logo.scale})`,
+                  transformOrigin: 'top right',
+                  zIndex: overlayZ,
+                  pointerEvents: isMoveTool ? 'auto' : 'none',
+                  cursor: isMoveTool ? (overlayDrag?.target === 'logo' ? 'grabbing' : 'grab') : 'default',
+                  outline: showOverlayOutline ? '1.5px dashed rgba(79,53,232,0.75)' : 'none',
+                  outlineOffset: 4,
+                  borderRadius: 6,
+                  userSelect: 'none',
+                  touchAction: 'none',
+                }}
+              >
+                <img
+                  src={store.logo.src || logoMdaUrl}
+                  alt="Logo"
+                  draggable={false}
+                  style={{
+                    maxHeight: 56,
+                    maxWidth: 180,
+                    display: 'block',
+                    filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))',
+                    pointerEvents: 'none',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* CTA bar (bottom-center) */}
+            {store.cta.enabled && (() => {
+              const visible = (Object.keys(store.cta.channels) as CtaChannel[])
+                .filter((k) => store.cta.channels[k].on && store.cta.channels[k].value.trim());
+              if (visible.length === 0) return null;
+
+              const icons: Record<CtaChannel, React.ReactNode> = {
+                website: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+                zalo: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+                email: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+                fb: <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>,
+                ig: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>,
+                li: <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 20.4h-3.5v-5.6c0-1.3 0-3-1.9-3s-2.1 1.4-2.1 2.9v5.7H9.4V9h3.3v1.6c.5-.9 1.6-1.9 3.3-1.9 3.5 0 4.2 2.3 4.2 5.4v6.3zM5.4 7.4a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm1.8 13H3.7V9h3.5v11.4z"/></svg>,
+              };
+
+              return (
+                <div
+                  onPointerDown={(e) => {
+                    if (!isMoveTool) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setOverlayDrag({
+                      sx: e.clientX, sy: e.clientY,
+                      ox: store.cta.offsetX, oy: store.cta.offsetY,
+                      target: 'cta',
+                    });
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    bottom: 18,
+                    transform: `translate(calc(-50% + ${store.cta.offsetX}px), ${store.cta.offsetY}px) scale(${store.cta.scale})`,
+                    transformOrigin: 'bottom center',
+                    zIndex: overlayZ,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 14,
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.94)',
+                    borderRadius: 999,
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: '#1f1f1f',
+                    whiteSpace: 'nowrap',
+                    maxWidth: 'calc(100% - 32px)',
+                    overflow: 'hidden',
+                    pointerEvents: isMoveTool ? 'auto' : 'none',
+                    cursor: isMoveTool ? (overlayDrag?.target === 'cta' ? 'grabbing' : 'grab') : 'default',
+                    outline: showOverlayOutline ? '1.5px dashed rgba(79,53,232,0.75)' : 'none',
+                    outlineOffset: 4,
+                    userSelect: 'none',
+                    touchAction: 'none',
+                  }}
+                >
+                  {visible.map((k, i) => (
+                    <React.Fragment key={k}>
+                      {i > 0 && <span style={{ width: 1, height: 12, background: '#d9def0' }} />}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4f35e8' }}>
+                        {icons[k]}
+                        <span style={{ color: '#1f1f1f' }}>{store.cta.channels[k].value}</span>
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Drawing overlay — captured in export */}
             <AnnotationLayer zoom={store.zoom} />
